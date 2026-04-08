@@ -32,7 +32,6 @@ dist-ssr
 
 # Vite
 *.tsbuildinfo
-package-lock.json
 
 # Tooling/Internal
 .gemini
