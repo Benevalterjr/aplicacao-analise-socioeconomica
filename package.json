@@ -20,6 +20,8 @@
     "axios": "^1.6.0",
     "clsx": "^2.1.0",
     "drizzle-orm": "^0.30.0",
+    "highcharts": "^12.5.0",
+    "highcharts-react-official": "^3.2.3",
     "lucide-react": "^0.300.0",
     "mysql2": "^3.6.0",
     "react": "^18.2.0",

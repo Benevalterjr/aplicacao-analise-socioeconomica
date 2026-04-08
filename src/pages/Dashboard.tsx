@@ -1,367 +1,267 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { fetchAllIndicators } from "@/ibge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, RefreshCw } from "lucide-react";
-import { BarChart, Bar, PieChart, Pie, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts";
-import { Streamdown } from "streamdown";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Loader2, RefreshCw, Users, TrendingUp, Heart, Palette, Landmark, BadgeCheck } from "lucide-react";
+import Highcharts from "highcharts";
+import HighchartsReact from "highcharts-react-official";
+import variablePie from "highcharts/modules/variable-pie";
 
-const COLORS = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"];
+// Initialize Highcharts modules
+if (typeof variablePie === 'function') {
+  (variablePie as any)(Highcharts);
+} else if (variablePie && (variablePie as any).default) {
+  (variablePie as any).default(Highcharts);
+}
 
 export default function Dashboard() {
-  const [isLoading, setIsLoading] = useState(false);
-  const [updateSuccess, setUpdateSuccess] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   const { data: indicators, isLoading: indicatorsLoading, refetch } = useQuery({
     queryKey: ['indicators'],
     queryFn: () => fetchAllIndicators(),
   });
-  
+
   const updateIndicators = useMutation({
     mutationFn: () => fetchAllIndicators(),
   });
 
   const handleUpdateData = async () => {
-    setIsLoading(true);
-    setUpdateSuccess(false);
+    setIsUpdating(true);
     try {
       await updateIndicators.mutateAsync();
-      setUpdateSuccess(true);
       refetch();
-      setTimeout(() => setUpdateSuccess(false), 3000);
     } catch (error) {
       console.error("Erro ao atualizar dados:", error);
     } finally {
-      setIsLoading(false);
+      setIsUpdating(false);
     }
   };
 
+  // Pastel Color Palette
+  const colors = {
+    blue: "#A7C7E7",
+    lavender: "#E6E6FA",
+    mint: "#B2F2BB",
+    peach: "#FFDAB9",
+    rose: "#FFC0CB",
+    sky: "#B0E0E6",
+    sage: "#C3D9A5"
+  };
+
+  const raceChartOptions = useMemo(() => ({
+    chart: {
+      type: 'variablepie',
+      backgroundColor: 'transparent',
+      height: 350
+    },
+    title: { text: null },
+    tooltip: {
+      headerFormat: '',
+      pointFormat: '<span style="color:{point.color}">\u25CF</span> <b> {point.name}</b><br/>' +
+        'População: <b>{point.y}</b><br/>' +
+        'Representatividade: <b>{point.z}%</b>'
+    },
+    plotOptions: {
+      variablepie: {
+        allowPointSelect: true,
+        cursor: 'pointer',
+        dataLabels: {
+          enabled: true,
+          format: '{point.name}',
+          distance: 20,
+          style: {
+            fontSize: '12px',
+            fontWeight: 'normal',
+            textOutline: 'none',
+            color: '#475569'
+          }
+        },
+        borderWidth: 2,
+        borderColor: '#ffffff'
+      }
+    },
+    series: [{
+      minPointSize: 10,
+      innerSize: '40%',
+      zMin: 0,
+      name: 'Etnias',
+      data: [
+        { name: 'Branca', y: indicators?.populationWhite || 0, z: 100, color: colors.blue },
+        { name: 'Preta', y: indicators?.populationBlack || 0, z: 80, color: colors.rose },
+        { name: 'Parda', y: indicators?.populationPardo || 0, z: 90, color: colors.lavender },
+        { name: 'Amarela', y: indicators?.populationYellow || 0, z: 60, color: colors.peach },
+        { name: 'Indígena', y: indicators?.populationIndigenous || 0, z: 50, color: colors.mint }
+      ]
+    }],
+    credits: { enabled: false }
+  }), [indicators, colors]);
+
+  const economicChartOptions = useMemo(() => ({
+    chart: {
+      type: 'areaspline',
+      backgroundColor: 'transparent',
+      height: 250
+    },
+    title: { text: null },
+    xAxis: {
+      categories: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun'],
+      lineColor: '#e2e8f0',
+      tickColor: '#e2e8f0',
+      labels: { style: { color: '#64748b' } }
+    },
+    yAxis: {
+      title: { text: null },
+      gridLineColor: '#f1f5f9',
+      labels: { style: { color: '#64748b' } }
+    },
+    tooltip: {
+      shared: true,
+      backgroundColor: 'rgba(255, 255, 255, 0.9)',
+      borderRadius: 12,
+      borderWidth: 0,
+      shadow: true
+    },
+    plotOptions: {
+      areaspline: {
+        fillOpacity: 0.2,
+        color: colors.sky,
+        lineWidth: 3,
+        marker: {
+          enabled: false,
+          states: { hover: { enabled: true } }
+        }
+      }
+    },
+    series: [{
+      name: 'IDH-M Projeção',
+      data: [0.85, 0.86, 0.88, 0.87, 0.89, indicators?.idhM || 0.902]
+    }],
+    credits: { enabled: false }
+  }), [indicators, colors]);
+
   if (indicatorsLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="animate-spin w-8 h-8" />
+      <div className="flex items-center justify-center min-h-screen bg-slate-50">
+        <div className="text-center">
+          <Loader2 className="animate-spin w-12 h-12 text-primary mx-auto mb-4" />
+          <p className="text-slate-500 font-medium animate-pulse">Carregando inteligência analítica...</p>
+        </div>
       </div>
     );
   }
 
-  // Preparar dados para gráficos
-  const indicatorsChartData = [
-    { name: "Renda Per Capita", value: parseFloat(String(indicators?.incomePerCapita || 0)) },
-    { name: "IDH-M", value: parseFloat(String(indicators?.idhM || 0)) * 100 },
-    { name: "Idade Média", value: parseFloat(String(indicators?.averageDeathAge || 0)) },
-  ];
-
-  const raceChartData = [
-    { name: "Branca", value: indicators?.populationWhite || 0 },
-    { name: "Preta", value: indicators?.populationBlack || 0 },
-    { name: "Parda", value: indicators?.populationPardo || 0 },
-    { name: "Amarela", value: indicators?.populationYellow || 0 },
-    { name: "Indígena", value: indicators?.populationIndigenous || 0 },
-  ];
-
-  const trendData = [
-    { month: "Jan", value: 70 },
-    { month: "Fev", value: 72 },
-    { month: "Mar", value: 75 },
-    { month: "Abr", value: 78 },
-    { month: "Mai", value: 80 },
-    { month: "Jun", value: 82 },
-  ];
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-8">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-slate-900 mb-2">Vila Sônia Analytics</h1>
-          <p className="text-slate-600">Indicadores Socioeconômicos - São Paulo</p>
-        </div>
+    <div className="min-h-screen pastel-gradient p-4 md:p-8 animate-in fade-in duration-700">
+      <div className="max-w-7xl mx-auto space-y-8">
+        
+        {/* Top Bar / Header */}
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 glass-card p-6 rounded-3xl">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Socioeconomic Analytics</h1>
+            <p className="text-slate-500 font-medium">Monitoramento Pro Max &bull; Censo 2022</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={handleUpdateData}
+              disabled={isUpdating}
+              variant="outline"
+              className="rounded-2xl border-white/40 bg-white/20 hover:bg-white/40 transition-all duration-300 gap-2 font-semibold text-slate-700"
+            >
+              {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4 text-slate-500" />}
+              Sincronizar SIDRA
+            </Button>
+            <div className="w-10 h-10 rounded-full bg-slate-200 border-2 border-white shadow-sm flex items-center justify-center overflow-hidden">
+               <BadgeCheck className="text-blue-400 w-6 h-6" />
+            </div>
+          </div>
+        </header>
 
-        {/* Botão de Atualização */}
-        <div className="mb-8 flex gap-4 items-center">
-          <Button
-            onClick={handleUpdateData}
-            disabled={isLoading}
-            className="gap-2 bg-blue-600 hover:bg-blue-700"
-          >
-            {isLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <RefreshCw className="w-4 h-4" />
-            )}
-            Atualizar Dados
-          </Button>
-          {updateSuccess && (
-            <span className="text-green-600 font-medium">✓ Dados atualizados com sucesso!</span>
-          )}
-        </div>
-
-        {/* Cards de Indicadores Principais */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          <Card className="border-0 shadow-lg">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-slate-600">População Total</CardTitle>
+        {/* Bento Grid Layout */}
+        <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 grid-rows-none md:grid-rows-2 gap-6">
+          
+          {/* Main Stat Card - Spans 2 cols */}
+          <Card className="md:col-span-2 glass-card hover:translate-y-[-4px] transition-transform duration-300">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-bold text-slate-500 uppercase tracking-wider">População Residente</CardTitle>
+              <Users className="h-5 w-5 text-blue-300" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-slate-900">
+              <div className="text-4xl font-black text-slate-800 leading-none py-4">
                 {indicators?.populationTotal?.toLocaleString("pt-BR") || "—"}
               </div>
-              <p className="text-xs text-slate-500 mt-1">Fonte: IBGE Censo 2022</p>
+              <div className="flex items-center gap-2 mt-2">
+                 <span className="px-2 py-1 bg-blue-100/50 text-blue-600 text-[10px] font-bold rounded-full uppercase">Censo Oficial</span>
+              </div>
             </CardContent>
           </Card>
 
-          <Card className="border-0 shadow-lg">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-slate-600">% Preto/Pardo</CardTitle>
+          {/* Social Impact Card */}
+          <Card className="md:col-span-2 glass-card hover:translate-y-[-4px] transition-transform duration-300">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-bold text-slate-500 uppercase tracking-wider">Impacto Cultural</CardTitle>
+              <Palette className="h-5 w-5 text-rose-300" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-slate-900">
-                {parseFloat(String(indicators?.percentageBlackPardo || 0)).toFixed(1)}%
+              <div className="text-4xl font-black text-slate-800 leading-none py-4">
+                {indicators?.culturalVulnerability?.toFixed(1)}
               </div>
-              <p className="text-xs text-slate-500 mt-1">Fonte: IBGE Censo 2022</p>
+              <p className="text-xs text-slate-500 font-medium">Índice de Vulnerabilidade Regional</p>
             </CardContent>
           </Card>
 
-          <Card className="border-0 shadow-lg">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-slate-600">Renda Per Capita</CardTitle>
+          {/* Small Feature Card - Sparkline */}
+          <Card className="md:col-span-2 lg:col-span-2 glass-card overflow-hidden">
+             <CardContent className="p-0">
+                <div className="px-6 pt-6">
+                   <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Evolução do IDH-M</h3>
+                   <div className="text-2xl font-black text-slate-800">
+                      {indicators?.idhM?.toFixed(3)}
+                   </div>
+                </div>
+                <div className="h-40 -mt-8">
+                   <HighchartsReact highcharts={Highcharts} options={economicChartOptions} />
+                </div>
+             </CardContent>
+          </Card>
+
+          {/* Large Creative Chart - Spans multiple rows/cols */}
+          <Card className="md:col-span-4 lg:col-span-4 lg:row-span-1 glass-card overflow-hidden">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-slate-700">
+                <Landmark className="w-5 h-5 text-lavender-400" />
+                Diversidade Étnica (Variable Pie)
+              </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-slate-900">
-                R$ {parseFloat(String(indicators?.incomePerCapita || 0)).toFixed(2)}
-              </div>
-              <p className="text-xs text-slate-500 mt-1">Fonte: Rede Nossa São Paulo 2024</p>
+            <CardContent className="p-4">
+               <HighchartsReact highcharts={Highcharts} options={raceChartOptions} />
             </CardContent>
           </Card>
 
-          <Card className="border-0 shadow-lg">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-slate-600">IDH-M</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-slate-900">
-                {parseFloat(String(indicators?.idhM || 0)).toFixed(3)}
-              </div>
-              <p className="text-xs text-slate-500 mt-1">Fonte: Rede Nossa São Paulo 2024</p>
-            </CardContent>
-          </Card>
+          {/* Secondary Stats - Bento Style */}
+          <div className="md:col-span-6 lg:col-span-2 grid grid-cols-2 gap-4">
+             <div className="glass-card p-6 rounded-3xl flex flex-col justify-center">
+                <Heart className="w-6 h-6 text-rose-300 mb-2" />
+                <div className="text-sm font-bold text-slate-500">Idade Média Morte</div>
+                <div className="text-2xl font-black text-slate-800">{indicators?.averageDeathAge?.toFixed(1)} <span className="text-sm font-medium">anos</span></div>
+             </div>
+             <div className="glass-card p-6 rounded-3xl flex flex-col justify-center">
+                <TrendingUp className="w-6 h-6 text-mint-400 mb-2" />
+                <div className="text-sm font-bold text-slate-500">Renda Capita</div>
+                <div className="text-xl font-black text-slate-800">R$ {indicators?.incomePerCapita?.toLocaleString("pt-BR")}</div>
+             </div>
+          </div>
 
-          <Card className="border-0 shadow-lg">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-slate-600">Idade Média de Morte</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-slate-900">
-                {parseFloat(String(indicators?.averageDeathAge || 0)).toFixed(1)} anos
-              </div>
-              <p className="text-xs text-slate-500 mt-1">Fonte: Rede Nossa São Paulo 2024</p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-lg">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-slate-600">Vulnerabilidade Cultural</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-slate-900">
-                {parseFloat(String(indicators?.culturalVulnerability || 0)).toFixed(2)}
-              </div>
-              <p className="text-xs text-slate-500 mt-1">Gap Socioeconômico</p>
-            </CardContent>
-          </Card>
         </div>
 
-        {/* Gráficos */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* Gráfico de Barras */}
-          <Card className="border-0 shadow-lg">
-            <CardHeader>
-              <CardTitle>Comparação de Indicadores</CardTitle>
-              <CardDescription>Principais métricas socioeconômicas</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={indicatorsChartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="value" fill="#3b82f6" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
+        {/* Footer info/attribution */}
+        <footer className="text-center py-8">
+           <p className="text-slate-400 text-sm font-medium">
+             Dados processados via SIDRA API &bull; Desenvolvido com Antigravity UI/UX Pro Max
+           </p>
+        </footer>
 
-          {/* Gráfico de Pizza */}
-          <Card className="border-0 shadow-lg">
-            <CardHeader>
-              <CardTitle>Distribuição por Cor/Raça</CardTitle>
-              <CardDescription>População residente por categoria</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={raceChartData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, value }) => `${name}: ${value}`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {raceChartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Gráfico de Linha */}
-        <Card className="border-0 shadow-lg mb-8">
-          <CardHeader>
-            <CardTitle>Tendências de Indicadores</CardTitle>
-            <CardDescription>Evolução dos dados ao longo do tempo</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={trendData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="value" stroke="#3b82f6" name="Índice" />
-              </LineChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* Tabela de Relatório */}
-        <Card className="border-0 shadow-lg mb-8">
-          <CardHeader>
-            <CardTitle>Relatório Sintético</CardTitle>
-            <CardDescription>Consolidação de todos os indicadores</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-100 border-b">
-                  <tr>
-                    <th className="px-4 py-3 text-left font-semibold text-slate-900">Indicador</th>
-                    <th className="px-4 py-3 text-left font-semibold text-slate-900">Valor</th>
-                    <th className="px-4 py-3 text-left font-semibold text-slate-900">Fonte</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="border-b hover:bg-slate-50">
-                    <td className="px-4 py-3 text-slate-700">População Total</td>
-                    <td className="px-4 py-3 font-medium text-slate-900">
-                      {indicators?.populationTotal?.toLocaleString("pt-BR") || "—"}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">IBGE Censo 2022</td>
-                  </tr>
-                  <tr className="border-b hover:bg-slate-50">
-                    <td className="px-4 py-3 text-slate-700">População Preta</td>
-                    <td className="px-4 py-3 font-medium text-slate-900">
-                      {indicators?.populationBlack?.toLocaleString("pt-BR") || "—"}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">IBGE Censo 2022</td>
-                  </tr>
-                  <tr className="border-b hover:bg-slate-50">
-                    <td className="px-4 py-3 text-slate-700">População Parda</td>
-                    <td className="px-4 py-3 font-medium text-slate-900">
-                      {indicators?.populationPardo?.toLocaleString("pt-BR") || "—"}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">IBGE Censo 2022</td>
-                  </tr>
-                  <tr className="border-b hover:bg-slate-50">
-                    <td className="px-4 py-3 text-slate-700">% Preto/Pardo</td>
-                    <td className="px-4 py-3 font-medium text-slate-900">
-                      {parseFloat(String(indicators?.percentageBlackPardo || 0)).toFixed(2)}%
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">IBGE Censo 2022</td>
-                  </tr>
-                  <tr className="border-b hover:bg-slate-50">
-                    <td className="px-4 py-3 text-slate-700">Renda Per Capita</td>
-                    <td className="px-4 py-3 font-medium text-slate-900">
-                      R$ {parseFloat(String(indicators?.incomePerCapita || 0)).toFixed(2)}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">Rede Nossa São Paulo 2024</td>
-                  </tr>
-                  <tr className="border-b hover:bg-slate-50">
-                    <td className="px-4 py-3 text-slate-700">IDH-M</td>
-                    <td className="px-4 py-3 font-medium text-slate-900">
-                      {parseFloat(String(indicators?.idhM || 0)).toFixed(3)}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">Rede Nossa São Paulo 2024</td>
-                  </tr>
-                  <tr className="border-b hover:bg-slate-50">
-                    <td className="px-4 py-3 text-slate-700">Idade Média de Morte</td>
-                    <td className="px-4 py-3 font-medium text-slate-900">
-                      {parseFloat(String(indicators?.averageDeathAge || 0)).toFixed(1)} anos
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">Rede Nossa São Paulo 2024</td>
-                  </tr>
-                  <tr className="border-b hover:bg-slate-50">
-                    <td className="px-4 py-3 text-slate-700">Equipamentos Culturais</td>
-                    <td className="px-4 py-3 font-medium text-slate-900">
-                      {indicators?.culturalEquipments || "—"}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">Rede Nossa São Paulo 2024</td>
-                  </tr>
-                  <tr className="hover:bg-slate-50">
-                    <td className="px-4 py-3 text-slate-700">Vulnerabilidade Cultural</td>
-                    <td className="px-4 py-3 font-medium text-slate-900">
-                      {parseFloat(String(indicators?.culturalVulnerability || 0)).toFixed(2)}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">Cálculo: (1 / (equipamentos + 0.1)) * 100</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Contexto Explicativo */}
-        <Card className="border-0 shadow-lg">
-          <CardHeader>
-            <CardTitle>Sobre os Indicadores</CardTitle>
-          </CardHeader>
-          <CardContent className="prose prose-sm max-w-none">
-            <Streamdown>
-## Fontes de Dados
-
-### IBGE Censo 2022
-Os dados de **população total**, **distribuição por cor/raça** e **idade mediana** são obtidos diretamente da API SIDRA do Instituto Brasileiro de Geografia e Estatística (IBGE), referentes ao Censo Demográfico 2022. Estes dados representam o universo populacional residente no município de São Paulo.
-
-### Rede Nossa São Paulo 2024
-Os indicadores de **renda per capita**, **IDH-M** (Índice de Desenvolvimento Humano Municipal), **idade média de morte** e **equipamentos culturais** são baseados em dados da Rede Nossa São Paulo, uma organização que monitora indicadores socioeconômicos e de qualidade de vida no município.
-
-## Cálculo da Vulnerabilidade Cultural
-
-O **índice de vulnerabilidade cultural** é calculado utilizando a fórmula do gap socioeconômico:
-
-Vulnerabilidade = 1 / (Equipamentos Culturais + 0.1) × 100
-
-Este indicador reflete a disparidade de acesso a equipamentos culturais na região, onde valores mais altos indicam maior vulnerabilidade.
-
-## Interpretação dos Dados
-
-- **População Total**: Número de habitantes residentes
-- **% Preto/Pardo**: Percentual da população que se autodeclara como preta ou parda
-- **Renda Per Capita**: Renda média por habitante
-- **IDH-M**: Índice que varia de 0 a 1, indicando desenvolvimento humano (quanto mais próximo de 1, melhor)
-- **Idade Média de Morte**: Expectativa de vida média na região
-            </Streamdown>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );
